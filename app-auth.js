@@ -8,13 +8,23 @@ function getDataUid() {
 }
 
 // Auth state listener
-auth.onAuthStateChanged(async (user) => {
+auth.onAuthStateChanged((user) => {
+  document.getElementById('loading-screen').style.display = 'none';
   if (user) {
     currentUser = user;
     viewingUid = null;
     viewingPermission = 'owner';
+    showApp();
+    // Setup user doc and init asynchronously
+    setupUserAndInit(user);
+  } else {
+    currentUser = null;
+    showLogin();
+  }
+});
 
-    // Create/update user doc
+async function setupUserAndInit(user) {
+  try {
     const userRef = db.collection('users').doc(user.uid);
     const userDoc = await userRef.get();
     if (!userDoc.exists) {
@@ -23,17 +33,13 @@ auth.onAuthStateChanged(async (user) => {
         email: user.email,
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
       });
-      // Migrate localStorage data for first-time users
       await migrateLocalData(user.uid);
     }
-
-    showApp();
-    init();
-  } else {
-    currentUser = null;
-    showLogin();
+  } catch (err) {
+    console.error('User setup error (continuing anyway):', err);
   }
-});
+  init();
+}
 
 async function migrateLocalData(uid) {
   const localCards = JSON.parse(localStorage.getItem('et_cards') || '[]');
@@ -86,7 +92,19 @@ async function migrateLocalData(uid) {
 // Login methods
 function loginWithGoogle() {
   const provider = new firebase.auth.GoogleAuthProvider();
-  auth.signInWithRedirect(provider);
+  auth.signInWithPopup(provider).then(result => {
+    console.log('Google login success:', result.user.email);
+    // Force trigger in case onAuthStateChanged doesn't fire
+    if (result.user && !currentUser) {
+      currentUser = result.user;
+      document.getElementById('loading-screen').style.display = 'none';
+      showApp();
+      init();
+    }
+  }).catch(err => {
+    console.error('Google login error:', err);
+    alert('Google login failed: ' + err.code + ' - ' + err.message);
+  });
 }
 
 function loginWithEmail() {
