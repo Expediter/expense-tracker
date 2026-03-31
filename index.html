@@ -1,0 +1,1152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Expense Tracker</title>
+    <meta name="theme-color" content="#1a73e8">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        :root {
+            --primary: #1a73e8;
+            --danger: #ea4335;
+            --success: #34a853;
+            --warning: #fbbc04;
+            --orange: #fa7b17;
+            --bg: #f8f9fa;
+            --card-bg: #ffffff;
+            --text: #202124;
+            --text-secondary: #5f6368;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg: #1a1a2e;
+                --card-bg: #16213e;
+                --text: #e0e0e0;
+                --text-secondary: #a0a0b0;
+            }
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            max-width: 600px;
+            margin: 0 auto;
+            padding-bottom: 70px;
+            min-height: 100vh;
+        }
+
+        /* Header */
+        .app-header {
+            background: var(--primary);
+            color: #fff;
+            padding: 16px 20px;
+            font-size: 1.2rem;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        /* Cards */
+        .card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+            padding: 16px;
+            margin: 12px 16px;
+        }
+
+        /* Tab Bar */
+        .tab-bar {
+            position: fixed;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100%;
+            max-width: 600px;
+            background: var(--card-bg);
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+            z-index: 200;
+        }
+
+        .tab-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 8px 2px;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 0.6rem;
+            cursor: pointer;
+            transition: color 0.2s, background 0.2s;
+            gap: 2px;
+        }
+
+        .tab-btn .tab-icon {
+            font-size: 1.2rem;
+        }
+
+        .tab-btn.active {
+            color: var(--primary);
+            background: rgba(26, 115, 232, 0.08);
+        }
+
+        /* Tab Content */
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.25s ease;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* FAB */
+        .fab {
+            position: fixed;
+            bottom: 80px;
+            right: 20px;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: var(--primary);
+            color: #fff;
+            font-size: 1.8rem;
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(26,115,232,0.4);
+            z-index: 150;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .fab:active {
+            transform: scale(0.92);
+        }
+
+        /* Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            z-index: 300;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal-card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 24px;
+            width: 90%;
+            max-width: 500px;
+            max-height: 85vh;
+            overflow-y: auto;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+        }
+
+        .modal-card h2 {
+            margin-bottom: 16px;
+            font-size: 1.2rem;
+        }
+
+        /* Form Elements */
+        .form-group {
+            margin-bottom: 14px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+            font-weight: 500;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+            background: var(--bg);
+            color: var(--text);
+            font-size: 0.95rem;
+            font-family: inherit;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            border-color: var(--primary);
+        }
+
+        .btn {
+            padding: 12px 20px;
+            border-radius: 8px;
+            border: none;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+            font-family: inherit;
+        }
+
+        .btn:active {
+            opacity: 0.8;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: #fff;
+            width: 100%;
+        }
+
+        .btn-danger {
+            background: var(--danger);
+            color: #fff;
+        }
+
+        .btn-secondary {
+            background: #e8eaed;
+            color: var(--text);
+        }
+
+        .btn-row {
+            display: flex;
+            gap: 10px;
+            margin-top: 16px;
+        }
+
+        .btn-row .btn {
+            flex: 1;
+        }
+
+        /* Tables */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+        }
+
+        th, td {
+            padding: 10px 8px;
+            text-align: left;
+            border-bottom: 1px solid rgba(0,0,0,0.08);
+        }
+
+        th {
+            font-weight: 600;
+            color: var(--text-secondary);
+            font-size: 0.78rem;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+
+        /* Progress Bars */
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e8eaed;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.4s ease;
+        }
+
+        .progress-fill.safe { background: var(--success); }
+        .progress-fill.caution { background: var(--warning); }
+        .progress-fill.warning { background: var(--orange); }
+        .progress-fill.exceeded { background: var(--danger); }
+
+        /* Status Badges */
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+
+        .badge-safe { background: rgba(52,168,83,0.15); color: var(--success); }
+        .badge-caution { background: rgba(251,188,4,0.15); color: #e6a800; }
+        .badge-warning { background: rgba(250,123,23,0.15); color: var(--orange); }
+        .badge-exceeded { background: rgba(234,67,53,0.15); color: var(--danger); }
+
+        /* Summary Bar */
+        .summary-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            background: var(--primary);
+            color: #fff;
+            font-weight: 600;
+        }
+
+        .summary-bar .amount {
+            font-size: 1.3rem;
+        }
+
+        .summary-bar .count {
+            font-size: 0.85rem;
+            opacity: 0.85;
+        }
+
+        /* Search & Filters */
+        .search-input {
+            width: 100%;
+            padding: 10px 14px;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+            background: var(--card-bg);
+            color: var(--text);
+            font-size: 0.9rem;
+            margin: 12px 16px;
+            width: calc(100% - 32px);
+            outline: none;
+        }
+
+        .search-input:focus {
+            border-color: var(--primary);
+        }
+
+        .filter-row {
+            display: flex;
+            gap: 8px;
+            padding: 0 16px 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .filter-row select,
+        .filter-row input {
+            padding: 8px;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+            background: var(--card-bg);
+            color: var(--text);
+            font-size: 0.82rem;
+            flex: 1;
+            min-width: 0;
+        }
+
+        .filter-row .date-toggle {
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+            background: var(--card-bg);
+            color: var(--text-secondary);
+            font-size: 0.82rem;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .filter-row .date-toggle.active {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+
+        .date-range-row {
+            display: none;
+            gap: 8px;
+            padding: 0 16px 8px;
+        }
+
+        .date-range-row.active {
+            display: flex;
+        }
+
+        .date-range-row input {
+            flex: 1;
+            padding: 8px;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+            background: var(--card-bg);
+            color: var(--text);
+            font-size: 0.82rem;
+        }
+
+        /* Expense List Item */
+        .expense-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            border-bottom: 1px solid rgba(0,0,0,0.06);
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        .expense-item:active {
+            background: rgba(0,0,0,0.03);
+        }
+
+        .expense-item .left {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .expense-item .desc {
+            font-weight: 500;
+            font-size: 0.95rem;
+        }
+
+        .expense-item .meta {
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+        }
+
+        .expense-item .right {
+            text-align: right;
+        }
+
+        .expense-item .amount {
+            font-weight: 600;
+            color: var(--danger);
+        }
+
+        .expense-item .date {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            padding: 12px 16px;
+        }
+
+        .stat-card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 14px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+        }
+
+        .stat-card .stat-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+
+        .stat-card .stat-value {
+            font-size: 1.3rem;
+            font-weight: 700;
+            margin-top: 4px;
+        }
+
+        /* Month Navigation */
+        .month-nav {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 16px;
+        }
+
+        .month-nav button {
+            background: none;
+            border: none;
+            font-size: 1.3rem;
+            color: var(--primary);
+            cursor: pointer;
+            padding: 4px 12px;
+        }
+
+        .month-nav .month-label {
+            font-weight: 600;
+            font-size: 1rem;
+        }
+
+        /* Section Headers */
+        .section-header {
+            padding: 16px 16px 8px;
+            font-weight: 600;
+            font-size: 0.95rem;
+            color: var(--text);
+        }
+
+        /* Chart Containers */
+        .chart-container {
+            padding: 16px;
+        }
+
+        .chart-container canvas {
+            width: 100% !important;
+            max-height: 280px;
+        }
+
+        /* Card Visual Bars */
+        .card-bar-item {
+            padding: 10px 16px;
+        }
+
+        .card-bar-item .bar-label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85rem;
+            margin-bottom: 4px;
+        }
+
+        /* Budget Item */
+        .budget-item {
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(0,0,0,0.06);
+        }
+
+        .budget-item .budget-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+
+        .budget-item .budget-category {
+            font-weight: 500;
+        }
+
+        .budget-item .budget-amounts {
+            font-size: 0.82rem;
+            color: var(--text-secondary);
+        }
+
+        /* Alert Cards */
+        .alert-card {
+            background: rgba(234,67,53,0.08);
+            border-left: 3px solid var(--danger);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 8px;
+            font-size: 0.88rem;
+        }
+
+        .alert-card.warn {
+            background: rgba(250,123,23,0.08);
+            border-left-color: var(--orange);
+        }
+
+        /* Quick Stats */
+        .quick-stats {
+            display: flex;
+            gap: 10px;
+            padding: 12px 16px;
+            overflow-x: auto;
+        }
+
+        .quick-stat {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 12px 16px;
+            min-width: 130px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+            text-align: center;
+        }
+
+        .quick-stat .qs-value {
+            font-size: 1.2rem;
+            font-weight: 700;
+        }
+
+        .quick-stat .qs-label {
+            font-size: 0.72rem;
+            color: var(--text-secondary);
+            margin-top: 2px;
+        }
+
+        /* Insight Item */
+        .insight-item {
+            padding: 14px 16px;
+            border-bottom: 1px solid rgba(0,0,0,0.06);
+        }
+
+        .insight-item .insight-icon {
+            font-size: 1.2rem;
+            margin-right: 8px;
+        }
+
+        .insight-item .insight-text {
+            font-size: 0.9rem;
+            line-height: 1.4;
+        }
+
+        /* Settings Sections */
+        .settings-section {
+            padding: 16px;
+            border-bottom: 8px solid var(--bg);
+        }
+
+        .settings-section h3 {
+            font-size: 0.95rem;
+            margin-bottom: 12px;
+            color: var(--text);
+        }
+
+        .settings-btn {
+            display: block;
+            width: 100%;
+            padding: 12px;
+            margin-top: 10px;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+            background: var(--card-bg);
+            color: var(--primary);
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            text-align: center;
+            font-family: inherit;
+        }
+
+        .settings-btn.export {
+            background: var(--success);
+            color: #fff;
+            border: none;
+        }
+
+        /* Overall Health Card */
+        .health-card {
+            text-align: center;
+            padding: 20px;
+        }
+
+        .health-card .health-pct {
+            font-size: 2.2rem;
+            font-weight: 700;
+        }
+
+        .health-card .health-label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-top: 4px;
+            margin-bottom: 12px;
+        }
+
+        /* Cards Summary Row */
+        .cards-summary {
+            display: flex;
+            justify-content: space-around;
+            padding: 14px 16px;
+            background: var(--primary);
+            color: #fff;
+            font-size: 0.82rem;
+            text-align: center;
+        }
+
+        .cards-summary .cs-item .cs-value {
+            font-size: 1.1rem;
+            font-weight: 700;
+        }
+
+        .cards-summary .cs-item .cs-label {
+            opacity: 0.85;
+            font-size: 0.72rem;
+        }
+
+        /* Responsive Tweaks */
+        @media (max-width: 400px) {
+            .tab-btn {
+                font-size: 0.55rem;
+            }
+            .tab-btn .tab-icon {
+                font-size: 1rem;
+            }
+            .stats-grid {
+                gap: 6px;
+            }
+        }
+
+        /* Delete button in lists */
+        .delete-btn {
+            background: none;
+            border: none;
+            color: var(--danger);
+            font-size: 1rem;
+            cursor: pointer;
+            padding: 4px 8px;
+        }
+
+        /* Empty state */
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-secondary);
+        }
+
+        .empty-state .empty-icon {
+            font-size: 2.5rem;
+            margin-bottom: 8px;
+        }
+
+        .empty-state .empty-text {
+            font-size: 0.9rem;
+        }
+
+        /* Sort bar */
+        .sort-bar {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            overflow-x: auto;
+        }
+        .sort-btn {
+            background: var(--card-bg);
+            border: 1px solid #ddd;
+            border-radius: 16px;
+            padding: 4px 12px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            white-space: nowrap;
+            font-family: inherit;
+            color: var(--text-secondary);
+            transition: all 0.15s;
+        }
+        .sort-btn.active {
+            background: var(--primary);
+            color: #fff;
+            border-color: var(--primary);
+        }
+
+        /* Bulk actions bar */
+        .bulk-bar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 8px 16px;
+            background: #fff3e0;
+            border-bottom: 1px solid #ffe0b2;
+        }
+        @media (prefers-color-scheme: dark) {
+            .bulk-bar { background: #3e2723; border-color: #5d4037; }
+        }
+        .bulk-select-all {
+            font-size: 0.82rem;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            cursor: pointer;
+        }
+        .bulk-select-all input { width: 16px; height: 16px; cursor: pointer; }
+        #selected-count { font-size: 0.82rem; color: var(--text-secondary); }
+        .btn-danger {
+            background: var(--danger);
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            padding: 6px 14px;
+            font-size: 0.82rem;
+            cursor: pointer;
+            font-family: inherit;
+            margin-left: auto;
+        }
+
+        /* Expense checkbox */
+        .expense-cb {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+            flex-shrink: 0;
+            margin-right: 10px;
+            accent-color: var(--primary);
+        }
+
+        /* Upload bar */
+        .upload-bar {
+            padding: 6px 16px;
+        }
+        .upload-btn {
+            width: 100%;
+            padding: 10px;
+            border: 2px dashed #ccc;
+            border-radius: 10px;
+            background: var(--card-bg);
+            color: var(--primary);
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: inherit;
+            transition: all 0.15s;
+        }
+        .upload-btn:hover { border-color: var(--primary); background: #e8f0fe; }
+
+        /* Custom add fields inline */
+        .input-with-add { display: flex; gap: 0; }
+        .input-with-add select { flex: 1; }
+        .new-field {
+            margin-top: 6px;
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: 8px;
+            border: 1px dashed var(--primary);
+            background: #e8f0fe;
+            font-size: 0.82rem;
+            font-family: inherit;
+            color: var(--text);
+        }
+        .new-card-inline {
+            display: flex;
+            gap: 8px;
+            margin-top: 6px;
+        }
+        .new-card-inline input { flex: 1; }
+
+        /* Import progress */
+        .import-status {
+            padding: 10px 16px;
+            font-size: 0.85rem;
+            color: var(--success);
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+
+<div class="app-header">Expense Tracker</div>
+
+<!-- ===== TAB: EXPENSES ===== -->
+<div id="tab-expenses" class="tab-content active">
+    <div class="summary-bar">
+        <span class="amount" id="total-spend">₹0</span>
+        <span class="count" id="txn-count">0 transactions</span>
+    </div>
+    <input type="text" class="search-input" id="search-input" placeholder="Search expenses...">
+    <div class="filter-row">
+        <select id="filter-card"><option value="">All Cards</option></select>
+        <select id="filter-category">
+            <option value="">All Categories</option>
+            <option value="Food">Food</option>
+            <option value="Grocery">Grocery</option>
+            <option value="Utilities">Utilities</option>
+            <option value="Travel">Travel</option>
+            <option value="Entertainment">Entertainment</option>
+            <option value="Sports">Sports</option>
+            <option value="Shopping">Shopping</option>
+            <option value="Health">Health</option>
+            <option value="Education">Education</option>
+            <option value="Other">Other</option>
+        </select>
+        <button class="date-toggle" id="date-toggle">📅 Date</button>
+    </div>
+    <div class="date-range-row" id="date-range-row">
+        <input type="date" id="filter-date-from" placeholder="From">
+        <input type="date" id="filter-date-to" placeholder="To">
+    </div>
+    <!-- Sort bar -->
+    <div class="sort-bar" id="sort-bar">
+        <span style="font-size:0.78rem;color:var(--text-secondary);">Sort:</span>
+        <button class="sort-btn active" data-sort="date" data-dir="desc">Date ↓</button>
+        <button class="sort-btn" data-sort="amount" data-dir="desc">Amount</button>
+        <button class="sort-btn" data-sort="card" data-dir="asc">Card</button>
+        <button class="sort-btn" data-sort="category" data-dir="asc">Category</button>
+    </div>
+    <!-- Bulk actions bar -->
+    <div class="bulk-bar" id="bulk-bar" style="display:none;">
+        <label class="bulk-select-all"><input type="checkbox" id="select-all-cb"> Select All</label>
+        <span id="selected-count">0 selected</span>
+        <button class="btn btn-danger" id="btn-bulk-delete">🗑️ Delete Selected</button>
+    </div>
+    <!-- Upload bar -->
+    <div class="upload-bar">
+        <button class="upload-btn" id="btn-upload">📁 Import from CSV</button>
+        <input type="file" id="file-upload" accept=".csv" style="display:none;">
+        <div style="font-size:0.72rem;color:var(--text-secondary);padding:4px 0;text-align:center;">For .numbers files, run in Terminal: <code style="background:#eee;padding:1px 4px;border-radius:3px;">python3 convert-numbers.py "file.numbers"</code></div>
+    </div>
+    <div id="expense-list"></div>
+</div>
+
+<!-- ===== TAB: CARDS ===== -->
+<div id="tab-cards" class="tab-content">
+    <div class="cards-summary">
+        <div class="cs-item">
+            <div class="cs-value" id="cards-total-limit">₹0</div>
+            <div class="cs-label">Total Limit</div>
+        </div>
+        <div class="cs-item">
+            <div class="cs-value" id="cards-total-spends">₹0</div>
+            <div class="cs-label">Total Spends</div>
+        </div>
+        <div class="cs-item">
+            <div class="cs-value" id="cards-overall-util">0%</div>
+            <div class="cs-label">Overall Util</div>
+        </div>
+    </div>
+    <div id="cards-table-container" class="card" style="margin-top:12px; overflow-x:auto;"></div>
+    <div id="cards-visual-bars"></div>
+</div>
+
+<!-- ===== TAB: MONTHLY ===== -->
+<div id="tab-monthly" class="tab-content">
+    <div class="month-nav">
+        <button id="month-prev">&lt;</button>
+        <span class="month-label" id="month-label">March 2026</span>
+        <button id="month-next">&gt;</button>
+    </div>
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-label">Total</div>
+            <div class="stat-value" id="monthly-total">₹0</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Transactions</div>
+            <div class="stat-value" id="monthly-txn">0</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Avg Daily</div>
+            <div class="stat-value" id="monthly-avg">₹0</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Active Days</div>
+            <div class="stat-value" id="monthly-days">0</div>
+        </div>
+    </div>
+    <div class="section-header">Category Breakdown</div>
+    <div id="monthly-category-breakdown" class="card"></div>
+    <div class="section-header">Card Breakdown</div>
+    <div id="monthly-card-breakdown" class="card"></div>
+    <div class="section-header">Daily Spending</div>
+    <div class="chart-container">
+        <canvas id="monthlyDailyChart"></canvas>
+    </div>
+</div>
+
+<!-- ===== TAB: CHARTS ===== -->
+<div id="tab-charts" class="tab-content">
+    <div class="section-header">By Category</div>
+    <div class="chart-container"><canvas id="categoryChart"></canvas></div>
+    <div class="section-header">By Card</div>
+    <div class="chart-container"><canvas id="cardChart"></canvas></div>
+    <div class="section-header">Card Utilisation</div>
+    <div class="chart-container"><canvas id="utilisationChart"></canvas></div>
+    <div class="section-header">Daily Trend</div>
+    <div class="chart-container"><canvas id="dailyChart"></canvas></div>
+</div>
+
+<!-- ===== TAB: BUDGET ===== -->
+<div id="tab-budget" class="tab-content">
+    <div class="month-nav">
+        <button id="budget-month-prev">&lt;</button>
+        <span class="month-label" id="budget-month-label">March 2026</span>
+        <button id="budget-month-next">&gt;</button>
+    </div>
+    <div class="card health-card" id="overall-health">
+        <div class="health-pct" id="health-pct">0%</div>
+        <div class="health-label">Overall Budget Used</div>
+        <div class="progress-bar"><div class="progress-fill safe" id="health-bar" style="width:0%"></div></div>
+    </div>
+    <div class="section-header">Critical Alerts</div>
+    <div id="critical-alerts" style="padding:0 16px;"></div>
+    <div class="section-header">Budget Breakdown</div>
+    <div id="budget-list" style="padding:0 16px;"></div>
+</div>
+
+<!-- ===== TAB: INSIGHTS ===== -->
+<div id="tab-insights" class="tab-content">
+    <div class="quick-stats" id="quick-stats-row"></div>
+    <div class="section-header">Insights</div>
+    <div id="insights-list"></div>
+</div>
+
+<!-- ===== TAB: SETTINGS ===== -->
+<div id="tab-settings" class="tab-content">
+    <div class="settings-section">
+        <h3>Cards</h3>
+        <div id="settings-cards-list"></div>
+        <button class="settings-btn" id="btn-add-card">+ Add Card</button>
+    </div>
+    <div class="settings-section">
+        <h3>Budgets</h3>
+        <div id="settings-budgets-list"></div>
+        <button class="settings-btn" id="btn-add-budget">+ Add Budget</button>
+    </div>
+    <div class="settings-section">
+        <button class="settings-btn export" id="btn-export-csv">Export as CSV</button>
+    </div>
+    <div class="settings-section">
+        <h3>Data Summary</h3>
+        <div id="data-summary"></div>
+    </div>
+    <div class="settings-section">
+        <h3>About</h3>
+        <p style="font-size:0.85rem; color:var(--text-secondary);">Expense Tracker v1.0 &mdash; A single-file PWA for tracking personal expenses, card utilisation, budgets, and spending insights. All data stored locally in your browser.</p>
+    </div>
+</div>
+
+<!-- FAB -->
+<button class="fab" id="fab-add">+</button>
+
+<!-- Tab Bar -->
+<nav class="tab-bar">
+    <button class="tab-btn active" data-tab="tab-expenses">
+        <span class="tab-icon">📋</span>Expenses
+    </button>
+    <button class="tab-btn" data-tab="tab-cards">
+        <span class="tab-icon">💳</span>Cards
+    </button>
+    <button class="tab-btn" data-tab="tab-monthly">
+        <span class="tab-icon">📅</span>Monthly
+    </button>
+    <button class="tab-btn" data-tab="tab-charts">
+        <span class="tab-icon">📊</span>Charts
+    </button>
+    <button class="tab-btn" data-tab="tab-budget">
+        <span class="tab-icon">🎯</span>Budget
+    </button>
+    <button class="tab-btn" data-tab="tab-insights">
+        <span class="tab-icon">💡</span>Insights
+    </button>
+    <button class="tab-btn" data-tab="tab-settings">
+        <span class="tab-icon">⚙️</span>Settings
+    </button>
+</nav>
+
+<!-- Modal: Add Expense -->
+<div class="modal-overlay" id="modal-expense">
+    <div class="modal-card">
+        <h2>Add Expense</h2>
+        <div class="form-group">
+            <label for="exp-date">Date</label>
+            <input type="date" id="exp-date">
+        </div>
+        <div class="form-group">
+            <label for="exp-amount">Amount (₹)</label>
+            <input type="number" id="exp-amount" step="0.01" placeholder="0.00">
+        </div>
+        <div class="form-group">
+            <label for="exp-desc">Notes</label>
+            <input type="text" id="exp-desc" placeholder="Any notes about this expense">
+        </div>
+        <div class="form-group">
+            <label for="exp-category">Category</label>
+            <div class="input-with-add">
+                <select id="exp-category">
+                    <option value="Food">Food</option>
+                    <option value="Grocery">Grocery</option>
+                    <option value="Utilities">Utilities</option>
+                    <option value="Travel">Travel</option>
+                    <option value="Entertainment">Entertainment</option>
+                    <option value="Sports">Sports</option>
+                    <option value="Shopping">Shopping</option>
+                    <option value="Health">Health</option>
+                    <option value="Education">Education</option>
+                    <option value="Other">Other</option>
+                    <option value="__new__">+ Add New Category...</option>
+                </select>
+            </div>
+            <input type="text" id="exp-new-category" class="new-field" placeholder="Enter new category name" style="display:none;">
+        </div>
+        <div class="form-group">
+            <label for="exp-card">Card</label>
+            <div class="input-with-add">
+                <select id="exp-card">
+                    <option value="__new__">+ Add New Card...</option>
+                </select>
+            </div>
+            <div id="exp-new-card-fields" class="new-card-inline" style="display:none;">
+                <input type="text" id="exp-new-card-name" class="new-field" placeholder="Card name">
+                <input type="number" id="exp-new-card-limit" class="new-field" placeholder="Credit limit (₹)">
+            </div>
+        </div>
+        <div class="btn-row">
+            <button class="btn btn-secondary" id="btn-cancel-expense">Cancel</button>
+            <button class="btn btn-primary" id="btn-save-expense">Save</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Add Card -->
+<div class="modal-overlay" id="modal-card">
+    <div class="modal-card">
+        <h2>Add Card</h2>
+        <div class="form-group">
+            <label for="card-name">Card Name</label>
+            <input type="text" id="card-name" placeholder="e.g. Chase Sapphire">
+        </div>
+        <div class="form-group">
+            <label for="card-limit">Credit Limit (₹)</label>
+            <input type="number" id="card-limit" step="100" placeholder="5000">
+        </div>
+        <div class="btn-row">
+            <button class="btn btn-secondary" id="btn-cancel-card">Cancel</button>
+            <button class="btn btn-primary" id="btn-save-card">Save</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Add Budget -->
+<div class="modal-overlay" id="modal-budget">
+    <div class="modal-card">
+        <h2>Add Budget</h2>
+        <div class="form-group">
+            <label for="budget-category">Category</label>
+            <select id="budget-category">
+                <option value="Food">Food</option>
+                <option value="Grocery">Grocery</option>
+                <option value="Utilities">Utilities</option>
+                <option value="Travel">Travel</option>
+                <option value="Entertainment">Entertainment</option>
+                <option value="Sports">Sports</option>
+                <option value="Shopping">Shopping</option>
+                <option value="Health">Health</option>
+                <option value="Education">Education</option>
+                <option value="Other">Other</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="budget-amount">Monthly Budget (₹)</label>
+            <input type="number" id="budget-amount" step="10" placeholder="500">
+        </div>
+        <div class="btn-row">
+            <button class="btn btn-secondary" id="btn-cancel-budget">Cancel</button>
+            <button class="btn btn-primary" id="btn-save-budget">Save</button>
+        </div>
+    </div>
+</div>
+
+<script src="app-data.js"></script>
+<script src="app-ui.js"></script>
+<script src="app-charts.js"></script>
+<script src="app-init.js"></script>
+
+</body>
+</html>
