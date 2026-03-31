@@ -99,27 +99,156 @@ function today() {
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
 
-// Persistence
-function loadData() {
-  if (!localStorage.getItem('et_seeded')) {
-    cards = DEFAULT_CARDS.map(c => ({...c}));
-    budgets = DEFAULT_BUDGETS.map(b => ({...b, id: gid()}));
-    expenses = SAMPLE_EXPENSES.map(e => ({...e, id: gid()}));
-    saveCards(); saveBudgets(); saveExpenses();
-    localStorage.setItem('et_seeded', '1');
+// ===== FIRESTORE PERSISTENCE =====
+function getUserRef() {
+  const uid = getDataUid();
+  if (!uid) return null;
+  return db.collection('users').doc(uid);
+}
+
+async function loadData() {
+  const userRef = getUserRef();
+  if (!userRef) return;
+
+  // Load cards
+  const cardsSnap = await userRef.collection('cards').get();
+  if (cardsSnap.empty) {
+    // Seed default data
+    await seedDefaults(userRef);
   } else {
-    cards = JSON.parse(localStorage.getItem('et_cards') || '[]');
-    expenses = JSON.parse(localStorage.getItem('et_expenses') || '[]');
-    budgets = JSON.parse(localStorage.getItem('et_budgets') || '[]');
+    cards = cardsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
   }
+
+  // Load expenses
+  const expSnap = await userRef.collection('expenses').get();
+  expenses = expSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+  // Load budgets
+  const budSnap = await userRef.collection('budgets').get();
+  budgets = budSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+  // Discover custom categories from expenses
+  expenses.forEach(e => {
+    if (e.category && !CATEGORIES.includes(e.category)) {
+      CATEGORIES.push(e.category);
+    }
+  });
+
   const now = new Date();
   currentMonth = now.getMonth() + 1; currentYear = now.getFullYear();
   budgetMonth = currentMonth; budgetYear = currentYear;
 }
 
-function saveCards() { localStorage.setItem('et_cards', JSON.stringify(cards)); }
-function saveExpenses() { localStorage.setItem('et_expenses', JSON.stringify(expenses)); }
-function saveBudgets() { localStorage.setItem('et_budgets', JSON.stringify(budgets)); }
+async function seedDefaults(userRef) {
+  const batch = db.batch();
+
+  DEFAULT_CARDS.forEach(c => {
+    const ref = userRef.collection('cards').doc(c.id);
+    batch.set(ref, { name: c.name, limit: c.limit });
+  });
+
+  DEFAULT_BUDGETS.forEach(b => {
+    const id = gid();
+    const ref = userRef.collection('budgets').doc(id);
+    batch.set(ref, { category: b.category, limit: b.limit, threshold: b.threshold });
+  });
+
+  SAMPLE_EXPENSES.forEach(e => {
+    const id = gid();
+    const ref = userRef.collection('expenses').doc(id);
+    batch.set(ref, { date: e.date, card: e.card, amount: e.amount, category: e.category, notes: e.notes });
+  });
+
+  await batch.commit();
+
+  // Reload after seeding
+  cards = DEFAULT_CARDS.map(c => ({ ...c }));
+  budgets = DEFAULT_BUDGETS.map(b => ({ ...b, id: gid() }));
+  expenses = SAMPLE_EXPENSES.map(e => ({ ...e, id: gid() }));
+}
+
+// Individual save functions (write to Firestore)
+async function saveCard(card) {
+  const userRef = getUserRef();
+  if (!userRef) return;
+  await userRef.collection('cards').doc(card.id).set({ name: card.name, limit: card.limit });
+}
+
+async function deleteCardDoc(cardId) {
+  const userRef = getUserRef();
+  if (!userRef) return;
+  await userRef.collection('cards').doc(cardId).delete();
+}
+
+async function saveExpense(expense) {
+  const userRef = getUserRef();
+  if (!userRef) return;
+  await userRef.collection('expenses').doc(expense.id).set({
+    date: expense.date, card: expense.card, amount: expense.amount,
+    category: expense.category, notes: expense.notes || ''
+  });
+}
+
+async function deleteExpenseDoc(expenseId) {
+  const userRef = getUserRef();
+  if (!userRef) return;
+  await userRef.collection('expenses').doc(expenseId).delete();
+}
+
+async function deleteExpenseDocs(ids) {
+  const userRef = getUserRef();
+  if (!userRef) return;
+  // Batch delete in chunks of 400
+  for (let i = 0; i < ids.length; i += 400) {
+    const batch = db.batch();
+    ids.slice(i, i + 400).forEach(id => {
+      batch.delete(userRef.collection('expenses').doc(id));
+    });
+    await batch.commit();
+  }
+}
+
+async function saveBudget(budget) {
+  const userRef = getUserRef();
+  if (!userRef) return;
+  await userRef.collection('budgets').doc(budget.id).set({
+    category: budget.category, limit: budget.limit, threshold: budget.threshold || 80
+  });
+}
+
+async function deleteBudgetDoc(budgetId) {
+  const userRef = getUserRef();
+  if (!userRef) return;
+  await userRef.collection('budgets').doc(budgetId).delete();
+}
+
+async function saveExpensesBatch(newExpenses) {
+  const userRef = getUserRef();
+  if (!userRef) return;
+  for (let i = 0; i < newExpenses.length; i += 400) {
+    const batch = db.batch();
+    newExpenses.slice(i, i + 400).forEach(e => {
+      const ref = userRef.collection('expenses').doc(e.id);
+      batch.set(ref, { date: e.date, card: e.card, amount: e.amount, category: e.category, notes: e.notes || '' });
+    });
+    await batch.commit();
+  }
+}
+
+async function saveCardsBatch(newCards) {
+  const userRef = getUserRef();
+  if (!userRef) return;
+  const batch = db.batch();
+  newCards.forEach(c => {
+    batch.set(userRef.collection('cards').doc(c.id), { name: c.name, limit: c.limit });
+  });
+  await batch.commit();
+}
+
+// Legacy compatibility wrappers (still update local arrays + Firestore)
+function saveCards() { /* cards are saved individually now */ }
+function saveExpenses() { /* expenses are saved individually now */ }
+function saveBudgets() { /* budgets are saved individually now */ }
 
 // Analytics helpers
 function getCardSpends(name) { return expenses.filter(e => e.card === name).reduce((s, e) => s + e.amount, 0); }

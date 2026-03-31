@@ -209,8 +209,8 @@ function renderSettings() {
     `<div style="font-size:0.88rem;line-height:1.8;">Total Expenses: <strong>${expenses.length}</strong><br>Total Cards: <strong>${cards.length}</strong><br>Categories Tracked: <strong>${new Set(expenses.map(e => e.category)).size}</strong><br>Date Range: <strong>${expenses.length > 0 ? fmtDate(expenses.reduce((m, e) => e.date < m ? e.date : m, expenses[0].date)) + ' - ' + fmtDate(expenses.reduce((m, e) => e.date > m ? e.date : m, expenses[0].date)) : 'N/A'}</strong></div>`;
 }
 
-function deleteCard(id) { cards = cards.filter(c => c.id !== id); saveCards(); renderSettings(); }
-function deleteBudget(id) { budgets = budgets.filter(b => b.id !== id); saveBudgets(); renderSettings(); }
+async function deleteCard(id) { cards = cards.filter(c => c.id !== id); await deleteCardDoc(id); renderSettings(); }
+async function deleteBudget(id) { budgets = budgets.filter(b => b.id !== id); await deleteBudgetDoc(id); renderSettings(); }
 
 // ===== CSV EXPORT =====
 function exportCSV() {

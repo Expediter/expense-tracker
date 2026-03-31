@@ -55,7 +55,7 @@ function setupEventListeners() {
 
   // Save expense
   document.getElementById('btn-cancel-expense').addEventListener('click', () => hideModal('modal-expense'));
-  document.getElementById('btn-save-expense').addEventListener('click', () => {
+  document.getElementById('btn-save-expense').addEventListener('click', async () => {
     const date = document.getElementById('exp-date').value;
     const amount = parseFloat(document.getElementById('exp-amount').value);
     const notes = document.getElementById('exp-desc').value.trim();
@@ -78,8 +78,9 @@ function setupEventListeners() {
       const cardLimit = parseFloat(document.getElementById('exp-new-card-limit').value) || 0;
       if (!cardName) { alert('Please enter a card name.'); return; }
       if (!cards.find(c => c.name.toLowerCase() === cardName.toLowerCase())) {
-        cards.push({ id: gid(), name: cardName, limit: cardLimit });
-        saveCards();
+        const newCard = { id: gid(), name: cardName, limit: cardLimit };
+        cards.push(newCard);
+        await saveCard(newCard);
         populateFilterDropdowns();
       }
     }
@@ -87,8 +88,9 @@ function setupEventListeners() {
     if (!date || !amount || amount <= 0 || !cardName) { alert('Please fill in date, amount, and card.'); return; }
 
     const matchedCard = cards.find(c => c.name.toLowerCase() === cardName.toLowerCase());
-    expenses.push({ id: gid(), date, card: matchedCard ? matchedCard.name : cardName, amount, category, notes: notes || category });
-    saveExpenses();
+    const expense = { id: gid(), date, card: matchedCard ? matchedCard.name : cardName, amount, category, notes: notes || category };
+    expenses.push(expense);
+    await saveExpense(expense);
     hideModal('modal-expense');
     // Reset form
     document.getElementById('exp-amount').value = '';
@@ -104,12 +106,13 @@ function setupEventListeners() {
   // Card modal
   document.getElementById('btn-add-card').addEventListener('click', () => showModal('modal-card'));
   document.getElementById('btn-cancel-card').addEventListener('click', () => hideModal('modal-card'));
-  document.getElementById('btn-save-card').addEventListener('click', () => {
+  document.getElementById('btn-save-card').addEventListener('click', async () => {
     const name = document.getElementById('card-name').value.trim();
     const limit = parseFloat(document.getElementById('card-limit').value);
     if (!name || !limit || limit <= 0) { alert('Please enter card name and limit.'); return; }
-    cards.push({ id: gid(), name, limit });
-    saveCards();
+    const card = { id: gid(), name, limit };
+    cards.push(card);
+    await saveCard(card);
     hideModal('modal-card');
     document.getElementById('card-name').value = '';
     document.getElementById('card-limit').value = '';
@@ -120,14 +123,19 @@ function setupEventListeners() {
   // Budget modal
   document.getElementById('btn-add-budget').addEventListener('click', () => showModal('modal-budget'));
   document.getElementById('btn-cancel-budget').addEventListener('click', () => hideModal('modal-budget'));
-  document.getElementById('btn-save-budget').addEventListener('click', () => {
+  document.getElementById('btn-save-budget').addEventListener('click', async () => {
     const category = document.getElementById('budget-category').value;
     const limit = parseFloat(document.getElementById('budget-amount').value);
     if (!limit || limit <= 0) { alert('Please enter a budget amount.'); return; }
     const existing = budgets.find(b => b.category === category);
-    if (existing) { existing.limit = limit; }
-    else { budgets.push({ id: gid(), category, limit, threshold: 80 }); }
-    saveBudgets();
+    if (existing) {
+      existing.limit = limit;
+      await saveBudget(existing);
+    } else {
+      const budget = { id: gid(), category, limit, threshold: 80 };
+      budgets.push(budget);
+      await saveBudget(budget);
+    }
     hideModal('modal-budget');
     document.getElementById('budget-amount').value = '';
     renderSettings();
@@ -197,14 +205,25 @@ function setupEventListeners() {
 
   // Export CSV
   document.getElementById('btn-export-csv').addEventListener('click', exportCSV);
+
+  // Logout
+  document.getElementById('btn-logout').addEventListener('click', logout);
+
+  // View back to own data
+  const viewBackBtn = document.getElementById('btn-view-back');
+  if (viewBackBtn) viewBackBtn.addEventListener('click', () => switchView(null));
 }
 
-function init() {
-  loadData();
+async function init() {
+  await loadData();
   populateFilterDropdowns();
   refreshCategoryDropdowns();
   setupEventListeners();
   renderExpenses();
+  // Accept any pending shares
+  acceptPendingShares();
+  // Render sharing UI if on settings tab
+  renderSharingUI();
 }
 
-document.addEventListener('DOMContentLoaded', init);
+// Auth handles init - no DOMContentLoaded needed

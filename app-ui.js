@@ -136,20 +136,21 @@ function updateBulkCount() {
   if (el) el.textContent = selectedIds.size + ' selected';
 }
 
-function bulkDelete() {
+async function bulkDelete() {
   if (selectedIds.size === 0) { alert('No expenses selected.'); return; }
   if (!confirm(`Delete ${selectedIds.size} expense(s)?`)) return;
+  const idsToDelete = [...selectedIds];
   expenses = expenses.filter(e => !selectedIds.has(e.id));
   selectedIds.clear();
-  saveExpenses();
+  await deleteExpenseDocs(idsToDelete);
   document.getElementById('select-all-cb').checked = false;
   renderExpenses();
 }
 
-function deleteExpense(id) {
+async function deleteExpense(id) {
   expenses = expenses.filter(e => e.id !== id);
   selectedIds.delete(id);
-  saveExpenses();
+  await deleteExpenseDoc(id);
   renderExpenses();
 }
 
@@ -288,7 +289,7 @@ function handleFileUpload(file) {
   }
 }
 
-function parseCSV(text) {
+async function parseCSV(text) {
   const lines = text.trim().split('\n');
   if (lines.length < 2) { alert('CSV file appears empty.'); return; }
 
@@ -364,7 +365,11 @@ function parseCSV(text) {
     imported++;
   }
 
-  saveCards(); saveExpenses();
+  // Batch save new cards and expenses to Firestore
+  const newCards = cards.filter(c => !DEFAULT_CARDS.find(d => d.id === c.id));
+  if (newCards.length > 0) await saveCardsBatch(newCards);
+  const newExps = expenses.slice(expenses.length - imported);
+  if (newExps.length > 0) await saveExpensesBatch(newExps);
   refreshCategoryDropdowns();
   populateFilterDropdowns();
   renderExpenses();
