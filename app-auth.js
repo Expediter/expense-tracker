@@ -86,9 +86,7 @@ async function migrateLocalData(uid) {
 // Login methods
 function loginWithGoogle() {
   const provider = new firebase.auth.GoogleAuthProvider();
-  auth.signInWithPopup(provider).catch(err => {
-    alert('Google login failed: ' + err.message);
-  });
+  auth.signInWithRedirect(provider);
 }
 
 function loginWithEmail() {
