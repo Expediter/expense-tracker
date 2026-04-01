@@ -99,160 +99,85 @@ function today() {
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
 
-// ===== FIRESTORE PERSISTENCE =====
-function getUserRef() {
+// ===== LOCALSTORAGE PERSISTENCE (per-user) =====
+function storageKey(suffix) {
   const uid = getDataUid();
-  if (!uid) return null;
-  return db.collection('users').doc(uid);
+  return uid ? 'et_' + uid + '_' + suffix : 'et_' + suffix;
 }
 
-async function loadData() {
-  const userRef = getUserRef();
-  if (!userRef) return;
+function loadData() {
+  const now = new Date();
+  currentMonth = now.getMonth() + 1;
+  currentYear = now.getFullYear();
+  budgetMonth = currentMonth;
+  budgetYear = currentYear;
 
-  // Load cards
-  const cardsSnap = await userRef.collection('cards').get();
-  if (cardsSnap.empty) {
-    // Seed default data
-    await seedDefaults(userRef);
+  const storedCards = localStorage.getItem(storageKey('cards'));
+  const storedExpenses = localStorage.getItem(storageKey('expenses'));
+  const storedBudgets = localStorage.getItem(storageKey('budgets'));
+
+  if (!storedCards && !storedExpenses) {
+    // Check if there's old non-uid data to migrate
+    const oldCards = localStorage.getItem('et_cards');
+    const oldExpenses = localStorage.getItem('et_expenses');
+    const oldBudgets = localStorage.getItem('et_budgets');
+    if (oldCards || oldExpenses) {
+      cards = JSON.parse(oldCards || '[]');
+      expenses = JSON.parse(oldExpenses || '[]');
+      budgets = JSON.parse(oldBudgets || '[]');
+      // Save under new uid-based keys
+      saveCards();
+      saveExpenses();
+      saveBudgets();
+      return;
+    }
+    // Seed defaults
+    cards = DEFAULT_CARDS.map(c => ({...c}));
+    budgets = DEFAULT_BUDGETS.map(b => ({...b, id: gid()}));
+    expenses = SAMPLE_EXPENSES.map(e => ({...e, id: gid()}));
+    saveCards(); saveBudgets(); saveExpenses();
   } else {
-    cards = cardsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    cards = JSON.parse(storedCards || '[]');
+    expenses = JSON.parse(storedExpenses || '[]');
+    budgets = JSON.parse(storedBudgets || '[]');
   }
 
-  // Load expenses
-  const expSnap = await userRef.collection('expenses').get();
-  expenses = expSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-
-  // Load budgets
-  const budSnap = await userRef.collection('budgets').get();
-  budgets = budSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-
-  // Discover custom categories from expenses
+  // Discover custom categories
   expenses.forEach(e => {
     if (e.category && !CATEGORIES.includes(e.category)) {
       CATEGORIES.push(e.category);
     }
   });
-
-  const now = new Date();
-  currentMonth = now.getMonth() + 1; currentYear = now.getFullYear();
-  budgetMonth = currentMonth; budgetYear = currentYear;
 }
 
-async function seedDefaults(userRef) {
-  const batch = db.batch();
+function saveCards() { localStorage.setItem(storageKey('cards'), JSON.stringify(cards)); }
+function saveExpenses() { localStorage.setItem(storageKey('expenses'), JSON.stringify(expenses)); }
+function saveBudgets() { localStorage.setItem(storageKey('budgets'), JSON.stringify(budgets)); }
 
-  DEFAULT_CARDS.forEach(c => {
-    const ref = userRef.collection('cards').doc(c.id);
-    batch.set(ref, { name: c.name, limit: c.limit });
-  });
-
-  DEFAULT_BUDGETS.forEach(b => {
-    const id = gid();
-    const ref = userRef.collection('budgets').doc(id);
-    batch.set(ref, { category: b.category, limit: b.limit, threshold: b.threshold });
-  });
-
-  SAMPLE_EXPENSES.forEach(e => {
-    const id = gid();
-    const ref = userRef.collection('expenses').doc(id);
-    batch.set(ref, { date: e.date, card: e.card, amount: e.amount, category: e.category, notes: e.notes });
-  });
-
-  await batch.commit();
-
-  // Reload after seeding
-  cards = DEFAULT_CARDS.map(c => ({ ...c }));
-  budgets = DEFAULT_BUDGETS.map(b => ({ ...b, id: gid() }));
-  expenses = SAMPLE_EXPENSES.map(e => ({ ...e, id: gid() }));
-}
-
-// Individual save functions (write to Firestore)
-async function saveCard(card) {
-  const userRef = getUserRef();
-  if (!userRef) return;
-  await userRef.collection('cards').doc(card.id).set({ name: card.name, limit: card.limit });
-}
-
-async function deleteCardDoc(cardId) {
-  const userRef = getUserRef();
-  if (!userRef) return;
-  await userRef.collection('cards').doc(cardId).delete();
-}
-
-async function saveExpense(expense) {
-  const userRef = getUserRef();
-  if (!userRef) return;
-  await userRef.collection('expenses').doc(expense.id).set({
-    date: expense.date, card: expense.card, amount: expense.amount,
-    category: expense.category, notes: expense.notes || ''
-  });
-}
-
-async function deleteExpenseDoc(expenseId) {
-  const userRef = getUserRef();
-  if (!userRef) return;
-  await userRef.collection('expenses').doc(expenseId).delete();
-}
-
-async function deleteExpenseDocs(ids) {
-  const userRef = getUserRef();
-  if (!userRef) return;
-  // Batch delete in chunks of 400
-  for (let i = 0; i < ids.length; i += 400) {
-    const batch = db.batch();
-    ids.slice(i, i + 400).forEach(id => {
-      batch.delete(userRef.collection('expenses').doc(id));
-    });
-    await batch.commit();
-  }
-}
-
-async function saveBudget(budget) {
-  const userRef = getUserRef();
-  if (!userRef) return;
-  await userRef.collection('budgets').doc(budget.id).set({
-    category: budget.category, limit: budget.limit, threshold: budget.threshold || 80
-  });
-}
-
-async function deleteBudgetDoc(budgetId) {
-  const userRef = getUserRef();
-  if (!userRef) return;
-  await userRef.collection('budgets').doc(budgetId).delete();
-}
-
-async function saveExpensesBatch(newExpenses) {
-  const userRef = getUserRef();
-  if (!userRef) return;
-  for (let i = 0; i < newExpenses.length; i += 400) {
-    const batch = db.batch();
-    newExpenses.slice(i, i + 400).forEach(e => {
-      const ref = userRef.collection('expenses').doc(e.id);
-      batch.set(ref, { date: e.date, card: e.card, amount: e.amount, category: e.category, notes: e.notes || '' });
-    });
-    await batch.commit();
-  }
-}
-
-async function saveCardsBatch(newCards) {
-  const userRef = getUserRef();
-  if (!userRef) return;
-  const batch = db.batch();
-  newCards.forEach(c => {
-    batch.set(userRef.collection('cards').doc(c.id), { name: c.name, limit: c.limit });
-  });
-  await batch.commit();
-}
-
-// Legacy compatibility wrappers (still update local arrays + Firestore)
-function saveCards() { /* cards are saved individually now */ }
-function saveExpenses() { /* expenses are saved individually now */ }
-function saveBudgets() { /* budgets are saved individually now */ }
+// Individual save wrappers (save to localStorage, same effect)
+function saveCard(card) { saveCards(); }
+function saveExpense(expense) { saveExpenses(); }
+function saveBudget(budget) { saveBudgets(); }
+function deleteCardDoc(cardId) { saveCards(); }
+function deleteExpenseDoc(expenseId) { saveExpenses(); }
+function deleteExpenseDocs(ids) { saveExpenses(); }
+function deleteBudgetDoc(budgetId) { saveBudgets(); }
+function saveExpensesBatch(newExps) { saveExpenses(); }
+function saveCardsBatch(newCards) { saveCards(); }
+function getUserRef() { return true; } // compatibility stub
 
 // Analytics helpers
-function getCardSpends(name) { return expenses.filter(e => e.card === name).reduce((s, e) => s + e.amount, 0); }
-function getCardUtil(name) { const c = cards.find(x => x.name === name); return c && c.limit > 0 ? (getCardSpends(name) / c.limit) * 100 : 0; }
+function getCardSpends(name, m, y) {
+  let exps = expenses.filter(e => e.card === name);
+  if (m && y) {
+    exps = exps.filter(e => { const d = new Date(e.date + 'T00:00:00'); return d.getMonth() + 1 === m && d.getFullYear() === y; });
+  }
+  return exps.reduce((s, e) => s + e.amount, 0);
+}
+function getCardUtil(name, m, y) {
+  const c = cards.find(x => x.name === name);
+  return c && c.limit > 0 ? (getCardSpends(name, m, y) / c.limit) * 100 : 0;
+}
 function getCategorySpends(cat, exps) { return (exps || expenses).filter(e => e.category === cat).reduce((s, e) => s + e.amount, 0); }
 function getExpensesForMonth(m, y) { return expenses.filter(e => { const d = new Date(e.date + 'T00:00:00'); return d.getMonth() + 1 === m && d.getFullYear() === y; }); }
 function utilColor(pct) { return pct > 80 ? '#ea4335' : pct > 50 ? '#fa7b17' : pct > 20 ? '#fbbc04' : '#34a853'; }

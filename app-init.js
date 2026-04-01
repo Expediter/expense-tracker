@@ -12,55 +12,13 @@ function populateFilterDropdowns() {
   expCardSel.innerHTML = expCardHtml;
 }
 
-function setupEventListeners() {
-  // Tab navigation
-  document.querySelectorAll('.tab-btn').forEach(btn => {
-    btn.addEventListener('click', () => switchTab(btn.dataset.tab));
-  });
-
-  // FAB
-  document.getElementById('fab-add').addEventListener('click', () => {
-    document.getElementById('exp-date').value = today();
-    populateFilterDropdowns();
-    // Reset custom fields
-    document.getElementById('exp-new-category').style.display = 'none';
-    document.getElementById('exp-new-card-fields').style.display = 'none';
-    showModal('modal-expense');
-  });
-
-  // Expense modal - category change for custom add
-  document.getElementById('exp-category').addEventListener('change', function() {
-    const newField = document.getElementById('exp-new-category');
-    if (this.value === '__new__') {
-      newField.style.display = 'block';
-      newField.focus();
-    } else {
-      newField.style.display = 'none';
-      newField.value = '';
-    }
-  });
-
-  // Expense modal - card change for custom add
-  document.getElementById('exp-card').addEventListener('change', function() {
-    const newFields = document.getElementById('exp-new-card-fields');
-    if (this.value === '__new__') {
-      newFields.style.display = 'flex';
-      document.getElementById('exp-new-card-name').focus();
-    } else {
-      newFields.style.display = 'none';
-      document.getElementById('exp-new-card-name').value = '';
-      document.getElementById('exp-new-card-limit').value = '';
-    }
-  });
-
-  // Save expense
-  document.getElementById('btn-cancel-expense').addEventListener('click', () => hideModal('modal-expense'));
-  document.getElementById('btn-save-expense').addEventListener('click', async () => {
+// ===== MODAL SAVE HANDLERS =====
+function handleSaveExpense() {
+  try {
     const date = document.getElementById('exp-date').value;
     const amount = parseFloat(document.getElementById('exp-amount').value);
     const notes = document.getElementById('exp-desc').value.trim();
 
-    // Handle category
     let category = document.getElementById('exp-category').value;
     if (category === '__new__') {
       category = document.getElementById('exp-new-category').value.trim();
@@ -71,16 +29,14 @@ function setupEventListeners() {
       }
     }
 
-    // Handle card
     let cardName = document.getElementById('exp-card').value;
     if (cardName === '__new__') {
       cardName = document.getElementById('exp-new-card-name').value.trim();
       const cardLimit = parseFloat(document.getElementById('exp-new-card-limit').value) || 0;
       if (!cardName) { alert('Please enter a card name.'); return; }
       if (!cards.find(c => c.name.toLowerCase() === cardName.toLowerCase())) {
-        const newCard = { id: gid(), name: cardName, limit: cardLimit };
-        cards.push(newCard);
-        await saveCard(newCard);
+        cards.push({ id: gid(), name: cardName, limit: cardLimit });
+        saveCards();
         populateFilterDropdowns();
       }
     }
@@ -90,140 +46,102 @@ function setupEventListeners() {
     const matchedCard = cards.find(c => c.name.toLowerCase() === cardName.toLowerCase());
     const expense = { id: gid(), date, card: matchedCard ? matchedCard.name : cardName, amount, category, notes: notes || category };
     expenses.push(expense);
-    await saveExpense(expense);
+    saveExpenses();
     hideModal('modal-expense');
-    // Reset form
-    document.getElementById('exp-amount').value = '';
-    document.getElementById('exp-desc').value = '';
-    document.getElementById('exp-new-category').style.display = 'none';
-    document.getElementById('exp-new-category').value = '';
-    document.getElementById('exp-new-card-fields').style.display = 'none';
-    document.getElementById('exp-new-card-name').value = '';
-    document.getElementById('exp-new-card-limit').value = '';
+    clearExpenseForm();
     renderExpenses();
-  });
+  } catch (err) {
+    alert('Error saving expense: ' + err.message);
+  }
+}
 
-  // Card modal
-  document.getElementById('btn-add-card').addEventListener('click', () => showModal('modal-card'));
-  document.getElementById('btn-cancel-card').addEventListener('click', () => hideModal('modal-card'));
-  document.getElementById('btn-save-card').addEventListener('click', async () => {
+function clearExpenseForm() {
+  document.getElementById('exp-date').value = '';
+  document.getElementById('exp-amount').value = '';
+  document.getElementById('exp-desc').value = '';
+  document.getElementById('exp-category').value = 'Food';
+  document.getElementById('exp-new-category').style.display = 'none';
+  document.getElementById('exp-new-category').value = '';
+  document.getElementById('exp-new-card-fields').style.display = 'none';
+  document.getElementById('exp-new-card-name').value = '';
+  document.getElementById('exp-new-card-limit').value = '';
+  const cardSel = document.getElementById('exp-card');
+  if (cardSel.options.length > 0) cardSel.selectedIndex = 0;
+}
+
+function handleSaveCard() {
+  try {
     const name = document.getElementById('card-name').value.trim();
     const limit = parseFloat(document.getElementById('card-limit').value);
     if (!name || !limit || limit <= 0) { alert('Please enter card name and limit.'); return; }
     const card = { id: gid(), name, limit };
     cards.push(card);
-    await saveCard(card);
+    saveCards();
     hideModal('modal-card');
     document.getElementById('card-name').value = '';
     document.getElementById('card-limit').value = '';
     populateFilterDropdowns();
     renderSettings();
-  });
+  } catch (err) {
+    alert('Error saving card: ' + err.message);
+  }
+}
 
-  // Budget modal
-  document.getElementById('btn-add-budget').addEventListener('click', () => showModal('modal-budget'));
-  document.getElementById('btn-cancel-budget').addEventListener('click', () => hideModal('modal-budget'));
-  document.getElementById('btn-save-budget').addEventListener('click', async () => {
+function handleSaveBudget() {
+  try {
     const category = document.getElementById('budget-category').value;
     const limit = parseFloat(document.getElementById('budget-amount').value);
     if (!limit || limit <= 0) { alert('Please enter a budget amount.'); return; }
     const existing = budgets.find(b => b.category === category);
     if (existing) {
       existing.limit = limit;
-      await saveBudget(existing);
     } else {
-      const budget = { id: gid(), category, limit, threshold: 80 };
-      budgets.push(budget);
-      await saveBudget(budget);
+      budgets.push({ id: gid(), category, limit, threshold: 80 });
     }
+    saveBudgets();
     hideModal('modal-budget');
     document.getElementById('budget-amount').value = '';
     renderSettings();
-  });
-
-  // Close modals on overlay click
-  document.querySelectorAll('.modal-overlay').forEach(m => {
-    m.addEventListener('click', (e) => { if (e.target === m) hideModal(m.id); });
-  });
-
-  // Search & filters
-  document.getElementById('search-input').addEventListener('input', renderExpenses);
-  document.getElementById('filter-card').addEventListener('change', renderExpenses);
-  document.getElementById('filter-category').addEventListener('change', renderExpenses);
-  document.getElementById('filter-date-from').addEventListener('change', renderExpenses);
-  document.getElementById('filter-date-to').addEventListener('change', renderExpenses);
-
-  // Date toggle
-  const dateRow = document.getElementById('date-range-row');
-  dateRow.style.display = 'none';
-  document.getElementById('date-toggle').addEventListener('click', () => {
-    dateRow.style.display = dateRow.style.display === 'none' ? 'flex' : 'none';
-    renderExpenses();
-  });
-
-  // Sort buttons
-  document.querySelectorAll('.sort-btn').forEach(btn => {
-    btn.addEventListener('click', () => setSort(btn.dataset.sort));
-  });
-
-  // Bulk delete
-  document.getElementById('select-all-cb').addEventListener('change', function() {
-    toggleSelectAll(this.checked);
-  });
-  document.getElementById('btn-bulk-delete').addEventListener('click', bulkDelete);
-
-  // File upload
-  document.getElementById('btn-upload').addEventListener('click', () => {
-    document.getElementById('file-upload').click();
-  });
-  document.getElementById('file-upload').addEventListener('change', function() {
-    if (this.files.length > 0) {
-      handleFileUpload(this.files[0]);
-      this.value = ''; // Reset so same file can be re-uploaded
-    }
-  });
-
-  // Monthly navigation
-  document.getElementById('month-prev').addEventListener('click', () => {
-    currentMonth--; if (currentMonth < 1) { currentMonth = 12; currentYear--; }
-    renderMonthly();
-  });
-  document.getElementById('month-next').addEventListener('click', () => {
-    currentMonth++; if (currentMonth > 12) { currentMonth = 1; currentYear++; }
-    renderMonthly();
-  });
-
-  // Budget month navigation
-  document.getElementById('budget-month-prev').addEventListener('click', () => {
-    budgetMonth--; if (budgetMonth < 1) { budgetMonth = 12; budgetYear--; }
-    renderBudget();
-  });
-  document.getElementById('budget-month-next').addEventListener('click', () => {
-    budgetMonth++; if (budgetMonth > 12) { budgetMonth = 1; budgetYear++; }
-    renderBudget();
-  });
-
-  // Export CSV
-  document.getElementById('btn-export-csv').addEventListener('click', exportCSV);
-
-  // Logout
-  document.getElementById('btn-logout').addEventListener('click', logout);
-
-  // View back to own data
-  const viewBackBtn = document.getElementById('btn-view-back');
-  if (viewBackBtn) viewBackBtn.addEventListener('click', () => switchView(null));
+  } catch (err) {
+    alert('Error saving budget: ' + err.message);
+  }
 }
 
-async function init() {
-  await loadData();
+// Custom dropdown handlers
+function onCategoryChange(sel) {
+  const newField = document.getElementById('exp-new-category');
+  if (sel.value === '__new__') {
+    newField.style.display = 'block';
+    newField.focus();
+  } else {
+    newField.style.display = 'none';
+    newField.value = '';
+  }
+}
+
+function onCardChange(sel) {
+  const newFields = document.getElementById('exp-new-card-fields');
+  if (sel.value === '__new__') {
+    newFields.style.display = 'flex';
+    document.getElementById('exp-new-card-name').focus();
+  } else {
+    newFields.style.display = 'none';
+    document.getElementById('exp-new-card-name').value = '';
+    document.getElementById('exp-new-card-limit').value = '';
+  }
+}
+
+// ===== INIT =====
+let initDone = false;
+
+function init() {
+  loadData();
   populateFilterDropdowns();
   refreshCategoryDropdowns();
-  setupEventListeners();
   renderExpenses();
-  // Accept any pending shares
-  acceptPendingShares();
-  // Render sharing UI if on settings tab
-  renderSharingUI();
+  if (!initDone) {
+    initDone = true;
+    try { acceptPendingShares(); } catch(e) {}
+    try { renderSharingUI(); } catch(e) {}
+  }
 }
-
-// Auth handles init - no DOMContentLoaded needed

@@ -849,9 +849,11 @@
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            min-height: 100vh;
+            position: fixed;
+            inset: 0;
             padding: 20px;
             background: var(--bg);
+            z-index: 8000;
         }
         .login-card {
             background: var(--card-bg);
@@ -954,8 +956,10 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            min-height: 100vh;
+            position: fixed;
+            inset: 0;
             background: var(--bg);
+            z-index: 9000;
         }
         .spinner {
             width: 40px;
@@ -1000,7 +1004,7 @@
     <span>Expense Tracker</span>
     <div class="header-right">
         <span id="header-user"></span>
-        <button class="btn-logout-small" id="btn-logout">Logout</button>
+        <button class="btn-logout-small" id="btn-logout" onclick="auth.signOut()">Logout</button>
     </div>
 </div>
 
@@ -1016,10 +1020,10 @@
         <span class="amount" id="total-spend">₹0</span>
         <span class="count" id="txn-count">0 transactions</span>
     </div>
-    <input type="text" class="search-input" id="search-input" placeholder="Search expenses...">
+    <input type="text" class="search-input" id="search-input" placeholder="Search expenses..." oninput="renderExpenses()">
     <div class="filter-row">
-        <select id="filter-card"><option value="">All Cards</option></select>
-        <select id="filter-category">
+        <select id="filter-card" onchange="renderExpenses()"><option value="">All Cards</option></select>
+        <select id="filter-category" onchange="renderExpenses()">
             <option value="">All Categories</option>
             <option value="Food">Food</option>
             <option value="Grocery">Grocery</option>
@@ -1032,30 +1036,30 @@
             <option value="Education">Education</option>
             <option value="Other">Other</option>
         </select>
-        <button class="date-toggle" id="date-toggle">📅 Date</button>
+        <button class="date-toggle" id="date-toggle" onclick="var r=document.getElementById('date-range-row');r.style.display=r.style.display==='none'?'flex':'none';renderExpenses();">📅 Date</button>
     </div>
     <div class="date-range-row" id="date-range-row">
-        <input type="date" id="filter-date-from" placeholder="From">
-        <input type="date" id="filter-date-to" placeholder="To">
+        <input type="date" id="filter-date-from" placeholder="From" onchange="renderExpenses()">
+        <input type="date" id="filter-date-to" placeholder="To" onchange="renderExpenses()">
     </div>
     <!-- Sort bar -->
     <div class="sort-bar" id="sort-bar">
         <span style="font-size:0.78rem;color:var(--text-secondary);">Sort:</span>
-        <button class="sort-btn active" data-sort="date" data-dir="desc">Date ↓</button>
-        <button class="sort-btn" data-sort="amount" data-dir="desc">Amount</button>
-        <button class="sort-btn" data-sort="card" data-dir="asc">Card</button>
-        <button class="sort-btn" data-sort="category" data-dir="asc">Category</button>
+        <button class="sort-btn active" data-sort="date" data-dir="desc" onclick="setSort('date')">Date ↓</button>
+        <button class="sort-btn" data-sort="amount" data-dir="desc" onclick="setSort('amount')">Amount</button>
+        <button class="sort-btn" data-sort="card" data-dir="asc" onclick="setSort('card')">Card</button>
+        <button class="sort-btn" data-sort="category" data-dir="asc" onclick="setSort('category')">Category</button>
     </div>
     <!-- Bulk actions bar -->
     <div class="bulk-bar" id="bulk-bar" style="display:none;">
-        <label class="bulk-select-all"><input type="checkbox" id="select-all-cb"> Select All</label>
+        <label class="bulk-select-all"><input type="checkbox" id="select-all-cb" onchange="toggleSelectAll(this.checked)"> Select All</label>
         <span id="selected-count">0 selected</span>
-        <button class="btn btn-danger" id="btn-bulk-delete">🗑️ Delete Selected</button>
+        <button class="btn btn-danger" id="btn-bulk-delete" onclick="bulkDelete()">🗑️ Delete Selected</button>
     </div>
     <!-- Upload bar -->
     <div class="upload-bar">
-        <button class="upload-btn" id="btn-upload">📁 Import from CSV</button>
-        <input type="file" id="file-upload" accept=".csv" style="display:none;">
+        <button class="upload-btn" id="btn-upload" onclick="document.getElementById('file-upload').click()">📁 Import from CSV</button>
+        <input type="file" id="file-upload" accept=".csv" style="display:none;" onchange="if(this.files.length>0){handleFileUpload(this.files[0]);this.value='';}">
         <div style="font-size:0.72rem;color:var(--text-secondary);padding:4px 0;text-align:center;">For .numbers files, run in Terminal: <code style="background:#eee;padding:1px 4px;border-radius:3px;">python3 convert-numbers.py "file.numbers"</code></div>
     </div>
     <div id="expense-list"></div>
@@ -1084,9 +1088,9 @@
 <!-- ===== TAB: MONTHLY ===== -->
 <div id="tab-monthly" class="tab-content">
     <div class="month-nav">
-        <button id="month-prev">&lt;</button>
+        <button id="month-prev" onclick="currentMonth--;if(currentMonth<1){currentMonth=12;currentYear--;}renderMonthly();">&lt;</button>
         <span class="month-label" id="month-label">March 2026</span>
-        <button id="month-next">&gt;</button>
+        <button id="month-next" onclick="currentMonth++;if(currentMonth>12){currentMonth=1;currentYear++;}renderMonthly();">&gt;</button>
     </div>
     <div class="stats-grid">
         <div class="stat-card">
@@ -1131,9 +1135,9 @@
 <!-- ===== TAB: BUDGET ===== -->
 <div id="tab-budget" class="tab-content">
     <div class="month-nav">
-        <button id="budget-month-prev">&lt;</button>
+        <button id="budget-month-prev" onclick="budgetMonth--;if(budgetMonth<1){budgetMonth=12;budgetYear--;}renderBudget();">&lt;</button>
         <span class="month-label" id="budget-month-label">March 2026</span>
-        <button id="budget-month-next">&gt;</button>
+        <button id="budget-month-next" onclick="budgetMonth++;if(budgetMonth>12){budgetMonth=1;budgetYear++;}renderBudget();">&gt;</button>
     </div>
     <div class="card health-card" id="overall-health">
         <div class="health-pct" id="health-pct">0%</div>
@@ -1158,15 +1162,15 @@
     <div class="settings-section">
         <h3>Cards</h3>
         <div id="settings-cards-list"></div>
-        <button class="settings-btn" id="btn-add-card">+ Add Card</button>
+        <button class="settings-btn" id="btn-add-card" onclick="showModal('modal-card')">+ Add Card</button>
     </div>
     <div class="settings-section">
         <h3>Budgets</h3>
         <div id="settings-budgets-list"></div>
-        <button class="settings-btn" id="btn-add-budget">+ Add Budget</button>
+        <button class="settings-btn" id="btn-add-budget" onclick="showModal('modal-budget')">+ Add Budget</button>
     </div>
     <div class="settings-section">
-        <button class="settings-btn export" id="btn-export-csv">Export as CSV</button>
+        <button class="settings-btn export" id="btn-export-csv" onclick="exportCSV()">Export as CSV</button>
     </div>
     <div class="settings-section">
         <h3>Data Summary</h3>
@@ -1183,35 +1187,35 @@
 </div>
 
 <!-- FAB -->
-<button class="fab" id="fab-add">+</button>
+<button class="fab" id="fab-add" onclick="clearExpenseForm();document.getElementById('exp-date').value=today();populateFilterDropdowns();showModal('modal-expense');">+</button>
 
 <!-- Tab Bar -->
 <nav class="tab-bar">
-    <button class="tab-btn active" data-tab="tab-expenses">
+    <button class="tab-btn active" data-tab="tab-expenses" onclick="switchTab('tab-expenses')">
         <span class="tab-icon">📋</span>Expenses
     </button>
-    <button class="tab-btn" data-tab="tab-cards">
+    <button class="tab-btn" data-tab="tab-cards" onclick="switchTab('tab-cards')">
         <span class="tab-icon">💳</span>Cards
     </button>
-    <button class="tab-btn" data-tab="tab-monthly">
+    <button class="tab-btn" data-tab="tab-monthly" onclick="switchTab('tab-monthly')">
         <span class="tab-icon">📅</span>Monthly
     </button>
-    <button class="tab-btn" data-tab="tab-charts">
+    <button class="tab-btn" data-tab="tab-charts" onclick="switchTab('tab-charts')">
         <span class="tab-icon">📊</span>Charts
     </button>
-    <button class="tab-btn" data-tab="tab-budget">
+    <button class="tab-btn" data-tab="tab-budget" onclick="switchTab('tab-budget')">
         <span class="tab-icon">🎯</span>Budget
     </button>
-    <button class="tab-btn" data-tab="tab-insights">
+    <button class="tab-btn" data-tab="tab-insights" onclick="switchTab('tab-insights')">
         <span class="tab-icon">💡</span>Insights
     </button>
-    <button class="tab-btn" data-tab="tab-settings">
+    <button class="tab-btn" data-tab="tab-settings" onclick="switchTab('tab-settings')">
         <span class="tab-icon">⚙️</span>Settings
     </button>
 </nav>
 
 <!-- Modal: Add Expense -->
-<div class="modal-overlay" id="modal-expense">
+<div class="modal-overlay" id="modal-expense" onclick="if(event.target===this){clearExpenseForm();hideModal('modal-expense')}">
     <div class="modal-card">
         <h2>Add Expense</h2>
         <div class="form-group">
@@ -1229,7 +1233,7 @@
         <div class="form-group">
             <label for="exp-category">Category</label>
             <div class="input-with-add">
-                <select id="exp-category">
+                <select id="exp-category" onchange="onCategoryChange(this)">
                     <option value="Food">Food</option>
                     <option value="Grocery">Grocery</option>
                     <option value="Utilities">Utilities</option>
@@ -1248,7 +1252,7 @@
         <div class="form-group">
             <label for="exp-card">Card</label>
             <div class="input-with-add">
-                <select id="exp-card">
+                <select id="exp-card" onchange="onCardChange(this)">
                     <option value="__new__">+ Add New Card...</option>
                 </select>
             </div>
@@ -1258,14 +1262,14 @@
             </div>
         </div>
         <div class="btn-row">
-            <button class="btn btn-secondary" id="btn-cancel-expense">Cancel</button>
-            <button class="btn btn-primary" id="btn-save-expense">Save</button>
+            <button class="btn btn-secondary" id="btn-cancel-expense" onclick="clearExpenseForm();hideModal('modal-expense')">Cancel</button>
+            <button class="btn btn-primary" id="btn-save-expense" onclick="handleSaveExpense()">Save</button>
         </div>
     </div>
 </div>
 
 <!-- Modal: Add Card -->
-<div class="modal-overlay" id="modal-card">
+<div class="modal-overlay" id="modal-card" onclick="if(event.target===this)hideModal('modal-card')">
     <div class="modal-card">
         <h2>Add Card</h2>
         <div class="form-group">
@@ -1277,14 +1281,14 @@
             <input type="number" id="card-limit" step="100" placeholder="5000">
         </div>
         <div class="btn-row">
-            <button class="btn btn-secondary" id="btn-cancel-card">Cancel</button>
-            <button class="btn btn-primary" id="btn-save-card">Save</button>
+            <button class="btn btn-secondary" id="btn-cancel-card" onclick="hideModal('modal-card')">Cancel</button>
+            <button class="btn btn-primary" id="btn-save-card" onclick="handleSaveCard()">Save</button>
         </div>
     </div>
 </div>
 
 <!-- Modal: Add Budget -->
-<div class="modal-overlay" id="modal-budget">
+<div class="modal-overlay" id="modal-budget" onclick="if(event.target===this)hideModal('modal-budget')">
     <div class="modal-card">
         <h2>Add Budget</h2>
         <div class="form-group">
@@ -1307,14 +1311,28 @@
             <input type="number" id="budget-amount" step="10" placeholder="500">
         </div>
         <div class="btn-row">
-            <button class="btn btn-secondary" id="btn-cancel-budget">Cancel</button>
-            <button class="btn btn-primary" id="btn-save-budget">Save</button>
+            <button class="btn btn-secondary" id="btn-cancel-budget" onclick="hideModal('modal-budget')">Cancel</button>
+            <button class="btn btn-primary" id="btn-save-budget" onclick="handleSaveBudget()">Save</button>
         </div>
     </div>
 </div>
 
 </div><!-- end #app-content -->
 
+<script>
+window.onerror = function(msg, url, line, col, err) {
+  var d = document.createElement('div');
+  d.style.cssText = 'position:fixed;top:0;left:0;right:0;background:red;color:white;padding:12px;z-index:9999;font-size:14px;';
+  d.textContent = 'JS ERROR: ' + msg + ' at ' + (url||'').split('/').pop() + ':' + line;
+  document.body.appendChild(d);
+};
+window.onunhandledrejection = function(e) {
+  var d = document.createElement('div');
+  d.style.cssText = 'position:fixed;top:40px;left:0;right:0;background:darkred;color:white;padding:12px;z-index:9999;font-size:14px;';
+  d.textContent = 'PROMISE ERROR: ' + (e.reason ? (e.reason.message || e.reason) : 'unknown');
+  document.body.appendChild(d);
+};
+</script>
 <script src="app-firebase-config.js"></script>
 <script src="app-data.js"></script>
 <script src="app-ui.js"></script>

@@ -136,28 +136,29 @@ function updateBulkCount() {
   if (el) el.textContent = selectedIds.size + ' selected';
 }
 
-async function bulkDelete() {
+function bulkDelete() {
   if (selectedIds.size === 0) { alert('No expenses selected.'); return; }
   if (!confirm(`Delete ${selectedIds.size} expense(s)?`)) return;
-  const idsToDelete = [...selectedIds];
   expenses = expenses.filter(e => !selectedIds.has(e.id));
   selectedIds.clear();
-  await deleteExpenseDocs(idsToDelete);
+  saveExpenses();
   document.getElementById('select-all-cb').checked = false;
   renderExpenses();
 }
 
-async function deleteExpense(id) {
+function deleteExpense(id) {
   expenses = expenses.filter(e => e.id !== id);
   selectedIds.delete(id);
-  await deleteExpenseDoc(id);
+  saveExpenses();
   renderExpenses();
 }
 
 // ===== CARDS TAB =====
 function renderCards() {
+  const m = currentMonth;
+  const y = currentYear;
   const totalLimit = cards.reduce((s, c) => s + c.limit, 0);
-  const totalSpends = cards.reduce((s, c) => s + getCardSpends(c.name), 0);
+  const totalSpends = cards.reduce((s, c) => s + getCardSpends(c.name, m, y), 0);
   const overallUtil = totalLimit > 0 ? (totalSpends / totalLimit) * 100 : 0;
 
   document.getElementById('cards-total-limit').textContent = fmt(totalLimit);
@@ -166,16 +167,16 @@ function renderCards() {
 
   let html = '<table><thead><tr><th style="text-align:left">Card</th><th style="text-align:right">Limit</th><th style="text-align:right">Spends</th><th style="text-align:right">Util %</th></tr></thead><tbody>';
   cards.forEach(c => {
-    const spends = getCardSpends(c.name);
+    const spends = getCardSpends(c.name, m, y);
     const util = c.limit > 0 ? (spends / c.limit) * 100 : 0;
     html += `<tr><td>${escHtml(c.name)}</td><td style="text-align:right">${fmt(c.limit)}</td><td style="text-align:right">${fmt(spends)}</td><td style="text-align:right;color:${utilColor(util)};font-weight:600;">${util.toFixed(1)}%</td></tr>`;
   });
   html += '</tbody></table>';
   document.getElementById('cards-table-container').innerHTML = html;
 
-  let barsHtml = '<div class="section-header">Utilisation Overview</div>';
+  let barsHtml = '<div class="section-header">Utilisation Overview (' + fmtMonthYear(m, y) + ')</div>';
   cards.forEach(c => {
-    const util = getCardUtil(c.name);
+    const util = getCardUtil(c.name, m, y);
     const color = utilColor(util);
     barsHtml += `<div class="card-bar-item"><div class="bar-label"><span>${escHtml(c.name)}</span><span style="color:${color};font-weight:600;">${util.toFixed(1)}%</span></div><div class="progress-bar"><div class="progress-fill" style="width:${Math.min(util, 100)}%;background:${color};"></div></div></div>`;
   });
@@ -289,14 +290,17 @@ function handleFileUpload(file) {
   }
 }
 
-async function parseCSV(text) {
+function parseCSV(text) {
   const lines = text.trim().split('\n');
   if (lines.length < 2) { alert('CSV file appears empty.'); return; }
+
+  showImportProgress('Parsing CSV... 0/' + (lines.length - 1) + ' rows');
 
   // Detect header
   const header = lines[0].toLowerCase();
   const hasHeader = header.includes('date') || header.includes('amount') || header.includes('card');
   const startIdx = hasHeader ? 1 : 0;
+  const totalRows = lines.length - startIdx;
 
   let imported = 0;
   let skipped = 0;
@@ -363,13 +367,17 @@ async function parseCSV(text) {
       notes: (notes || '').trim()
     });
     imported++;
+
   }
 
-  // Batch save new cards and expenses to Firestore
-  const newCards = cards.filter(c => !DEFAULT_CARDS.find(d => d.id === c.id));
-  if (newCards.length > 0) await saveCardsBatch(newCards);
-  const newExps = expenses.slice(expenses.length - imported);
-  if (newExps.length > 0) await saveExpensesBatch(newExps);
+  // Save everything to localStorage
+  saveCards();
+  saveExpenses();
+  if (budgets.length === 0) {
+    budgets = DEFAULT_BUDGETS.map(b => ({ ...b, id: gid() }));
+    saveBudgets();
+  }
+
   refreshCategoryDropdowns();
   populateFilterDropdowns();
   renderExpenses();
@@ -417,14 +425,28 @@ function parseFlexibleDate(str) {
 }
 
 
+// ===== IMPORT PROGRESS TOAST =====
+function showImportProgress(msg) {
+  let toast = document.getElementById('import-toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'import-toast';
+    toast.style.cssText = 'position:fixed;top:60px;right:16px;background:var(--card-bg);color:var(--text);padding:12px 16px;border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,0.15);z-index:9000;font-size:0.85rem;max-width:260px;transition:opacity 0.3s;';
+    document.body.appendChild(toast);
+  }
+  toast.textContent = msg;
+  toast.style.opacity = '1';
+  toast.style.display = 'block';
+}
+
+function hideImportProgress() {
+  const toast = document.getElementById('import-toast');
+  if (toast) { toast.style.opacity = '0'; setTimeout(() => { toast.style.display = 'none'; }, 300); }
+}
+
 function showImportStatus(msg) {
-  // Show status temporarily above expense list
-  const el = document.createElement('div');
-  el.className = 'import-status';
-  el.textContent = '✅ ' + msg;
-  const list = document.getElementById('expense-list');
-  list.parentNode.insertBefore(el, list);
-  setTimeout(() => el.remove(), 4000);
+  showImportProgress('✅ ' + msg);
+  setTimeout(hideImportProgress, 5000);
 }
 
 function refreshCategoryDropdowns() {
